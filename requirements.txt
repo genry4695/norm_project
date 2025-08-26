@@ -1,2 +1,23 @@
-pydantic==2.5.3
-# add additional modules here
+# pydantic==2.5.3
+
+# Core framework
+fastapi
+uvicorn
+
+# Pydantic (models/validation)
+pydantic>=2.0
+
+# Vector DB
+qdrant-client>=1.7.0
+
+# LlamaIndex core (with embeddings + vector stores)
+llama-index>=0.10.0
+
+# OpenAI (for embeddings + LLM)
+openai>=1.0.0
+
+# PDF parsing (to implement DocumentService.load)
+pypdf
+
+# dotenv
+python-dotenv
