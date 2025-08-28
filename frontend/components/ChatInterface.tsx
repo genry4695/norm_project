@@ -105,7 +105,6 @@ export default function ChatInterface() {
 
   return (
     <Box maxW="4xl" mx="auto" h="100%" display="flex" flexDirection="column">
-      {/* Header */}
       <Box p={4} borderBottom="1px" borderColor="gray.200">
         <Text fontSize="lg" fontWeight="bold">
           Westeros Legal Assistant
@@ -115,7 +114,6 @@ export default function ChatInterface() {
         </Text>
       </Box>
 
-      {/* Messages */}
       <VStack flex={1} overflowY="auto" p={4} spacing={4} align="stretch">
         {messages.length === 0 && (
           <Box textAlign="center" py={8} color="gray.500">
@@ -191,7 +189,6 @@ export default function ChatInterface() {
         <div ref={messagesEndRef} />
       </VStack>
 
-      {/* Input */}
       <Box p={4} borderTop="1px" borderColor="gray.200">
         <HStack>
           <Input

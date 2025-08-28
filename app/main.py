@@ -9,21 +9,10 @@ async def root():
 
 @app.get("/query")
 async def query_documents(query: str = Query(..., description="Query string to search documents")):
-    """
-    Query documents using RAG (Retrieval-Augmented Generation).
-    
-    Args:
-        query: The question or query string
-        
-    Returns:
-        JSON response with query, response, and citations
-    """
     try:
-        # Initialize services
         doc_service = DocumentService()
         qdrant_service = QdrantService(k=2)
         
-        # Load documents from the laws.pdf file
         pdf_path = "docs/laws.pdf"
         documents = doc_service.create_documents(pdf_path)
         
@@ -34,11 +23,9 @@ async def query_documents(query: str = Query(..., description="Query string to s
                 citations=[]
             )
         
-        # Connect and load documents into the vector index
         qdrant_service.connect()
         qdrant_service.load(documents)
         
-        # Query the documents
         result = qdrant_service.query(query)
         
         return result

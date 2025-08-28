@@ -11,7 +11,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Forward the query to FastAPI backend
     const backendUrl = `http://localhost:8000/query?query=${encodeURIComponent(query)}`;
     const backendResponse = await fetch(backendUrl, {
       method: 'GET',

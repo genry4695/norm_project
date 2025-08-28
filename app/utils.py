@@ -9,7 +9,6 @@ from typing import List, Dict, Any
 import pypdf
 import re
 
-# Load environment variables
 load_dotenv()
 
 def get_openai_api_key():
@@ -29,35 +28,28 @@ class Output(BaseModel):
     citations: list[Citation]
 
 def extract_pdf_lines(path: str) -> List[Dict[str, Any]]:
-    """Extract text from PDF line by line with page tracking."""
     reader = pypdf.PdfReader(path)
     pages = []
-    for i, page in enumerate(reader.pages, start=1):  # 1-based page numbers
+    for i, page in enumerate(reader.pages, start=1):
         raw = page.extract_text() or ""
-        # Normalize common issues
         lines = [l.rstrip() for l in raw.splitlines()]
         pages.append({"page": i, "lines": lines})
     return pages
 
 def create_documents_from_pdf(pdf_path: str, source_file: str = "docs/laws.pdf"):
-    """Create properly structured documents from PDF using LLM for intelligent extraction."""
     pages = extract_pdf_lines(pdf_path)
     
-    # Combine all text from PDF
     all_text = ""
     for page in pages:
         all_text += " " + " ".join(page["lines"])
     
-    # Use LLM to extract structured sections
     try:
         from llama_index.llms.openai import OpenAI
         from llama_index.core import PromptTemplate
         
-        # Get API key
         api_key = get_openai_api_key()
         llm = OpenAI(api_key=api_key, model="gpt-4o-mini")
         
-        # Create a prompt to extract structured legal sections
         extraction_prompt = PromptTemplate(
             "You are a legal document parser. Extract the legal structure from the following text.\n\n"
             "CRITICAL INSTRUCTIONS:\n"
@@ -83,35 +75,27 @@ def create_documents_from_pdf(pdf_path: str, source_file: str = "docs/laws.pdf")
             "]"
         )
         
-        # Extract structured content
-        response = llm.complete(extraction_prompt.format(text=all_text[:4000]))  # Limit text length
+        response = llm.complete(extraction_prompt.format(text=all_text[:4000]))
         
-
-        
-        # Parse the response and create documents
         import json
         try:
             sections = json.loads(response.text)
             documents = []
             
-            # First pass: collect category information
             categories = {}
             for section in sections:
                 if isinstance(section, dict) and 'content' in section:
                     section_number = section.get("section_number", "unknown")
-                    if len(section_number.split('.')) == 1:  # This is a category
+                    if len(section_number.split('.')) == 1:
                         categories[section_number] = section.get("title", "")
             
-            # Second pass: create documents for laws with category context
             for section in sections:
                 if isinstance(section, dict) and 'content' in section:
                     section_number = section.get("section_number", "unknown")
                     content = section["content"]
                     title = section.get("title", content[:100])
                     
-                    # Only process sections that are actual laws (have subsections)
                     if len(section_number.split('.')) > 1:
-                        # Build hierarchical path for nested laws
                         parts = section_number.split('.')
                         parent_category = parts[0]
                         category_title = categories.get(parent_category, "")
@@ -133,7 +117,6 @@ def create_documents_from_pdf(pdf_path: str, source_file: str = "docs/laws.pdf")
             return documents
             
         except json.JSONDecodeError:
-            # If LLM response isn't valid JSON, raise an error
             raise Exception("LLM extraction failed: Invalid JSON response")
             
     except Exception as e:
@@ -141,21 +124,10 @@ def create_documents_from_pdf(pdf_path: str, source_file: str = "docs/laws.pdf")
 
 
 class DocumentService:
-    """Service for loading PDF documents and extracting their contents."""
-    
     def __init__(self):
         pass
     
     def create_documents(self, pdf_path: str) -> List[Document]:
-        """
-        Load PDF and create Document objects for vector indexing.
-        
-        Args:
-            pdf_path: Path to the PDF file
-            
-        Returns:
-            List of Document objects with metadata and text
-        """
         try:
             return create_documents_from_pdf(pdf_path)
             
@@ -164,63 +136,42 @@ class DocumentService:
 
 
 class QdrantService:
-    """Service for vector search and RAG operations using Qdrant."""
-    
     def __init__(self, k: int = 2):
         self.index = None
         self.k = k
 
     def connect(self) -> None:
-        """Initialize the vector index with OpenAI services."""
         from llama_index.core import Settings
         
-        # Get API key
         api_key = get_openai_api_key()
         
-        # Configure settings for embeddings and LLM
         Settings.embed_model = OpenAIEmbedding(api_key=api_key)
         Settings.llm = OpenAI(api_key=api_key, model="gpt-5")
         
-        # Create a simple in-memory index
         self.index = VectorStoreIndex.from_documents([])
 
     def load(self, docs: List[Document]) -> None:
-        """Load documents into the vector index."""
         for doc in docs:
             self.index.insert(doc)
 
     def query(self, query_str: str) -> Output:
-        """
-        Query the vector index and return RAG response with citations.
-        
-        Args:
-            query_str: The query string
-            
-        Returns:
-            Output object with query, response, and citations
-        """
         if not self.index:
             raise Exception("Vector index not initialized. Call connect() first.")
         
-        # Create a query engine from the index
         query_engine = self.index.as_query_engine(
             similarity_top_k=self.k,
             response_mode="compact"
         )
         
-        # Execute the query
         response = query_engine.query(query_str)
         
-        # Extract citations from the response
         citations = []
         if hasattr(response, 'source_nodes') and response.source_nodes:
             for i, node in enumerate(response.source_nodes[:self.k]):
-                # Get rich metadata for better citation
                 section_number = node.metadata.get('section_number', 'Unknown')
                 category_title = node.metadata.get('category_title', '')
                 title = node.metadata.get('title', '')
                 
-                # Create descriptive source with law number and category
                 if category_title and section_number:
                     source = f"Law {section_number} ({category_title}) - {title}"
                 elif section_number:
@@ -231,14 +182,12 @@ class QdrantService:
                 text = node.text[:200] + "..." if len(node.text) > 200 else node.text
                 citations.append(Citation(source=source, text=text))
         
-        # If no citations found, create a generic one
         if not citations:
             citations.append(Citation(
                 source="Document",
                 text="Information retrieved from document analysis."
             ))
         
-        # Create the output object
         output = Output(
             query=query_str,
             response=response.response,
