@@ -59,19 +59,26 @@ def create_documents_from_pdf(pdf_path: str, source_file: str = "docs/laws.pdf")
         
         # Create a prompt to extract structured legal sections
         extraction_prompt = PromptTemplate(
-            "You are a legal document parser. Extract all legal sections from the following text and format them as structured documents.\n\n"
-            "For each section, identify:\n"
-            "- Section number (e.g., 1, 1.1, 1.1.1)\n"
-            "- Section title/content\n"
-            "- Any subsections\n\n"
+            "You are a legal document parser. Extract the legal structure from the following text.\n\n"
+            "CRITICAL INSTRUCTIONS:\n"
+            "- Extract BOTH category headers (like '1', '2', '3') AND substantive laws (like 1.1, 1.1.1, 1.1.2, 2.1, etc.)\n"
+            "- Category headers should have section_number like '1', '2', '3' and represent main topics\n"
+            "- Laws should have section_number like '1.1', '1.1.1', '1.1.2' and represent specific legal provisions\n"
+            "- Each section should be a separate document\n"
+            "- This will allow us to map laws to their categories\n\n"
             "Text to parse:\n{text}\n\n"
             "IMPORTANT: Return ONLY valid JSON. Do not include any explanatory text before or after the JSON.\n\n"
-            "Return a JSON array of objects with this exact structure:\n"
+            "Return a JSON array with both categories and laws:\n"
             "[\n"
             "  {\n"
             "    \"section_number\": \"1\",\n"
             "    \"title\": \"Peace\",\n"
-            "    \"content\": \"The law requires petty lords and landed knights to take their disputes to their liege lord...\"\n"
+            "    \"content\": \"Main category for peace-related laws...\"\n"
+            "  },\n"
+            "  {\n"
+            "    \"section_number\": \"1.1\",\n"
+            "    \"title\": \"Dispute Resolution\",\n"
+            "    \"content\": \"The law requires petty lords and landed knights to take their disputes...\"\n"
             "  }\n"
             "]"
         )
@@ -79,25 +86,70 @@ def create_documents_from_pdf(pdf_path: str, source_file: str = "docs/laws.pdf")
         # Extract structured content
         response = llm.complete(extraction_prompt.format(text=all_text[:4000]))  # Limit text length
         
+
+        
         # Parse the response and create documents
         import json
         try:
             sections = json.loads(response.text)
             documents = []
             
+            # First pass: collect category information
+            categories = {}
             for section in sections:
                 if isinstance(section, dict) and 'content' in section:
-                    meta = {
-                        "section_number": section.get("section_number", "unknown"),
-                        "title": section.get("title", section.get("content", "")[:100]),
-                        "page_start": 1,
-                        "page_end": 2,
-                        "source_file": source_file,
-                        "source": source_file,
-                        "citations": [f"{source_file}#p1"]
-                    }
-                    doc = Document(text=section["content"], metadata=meta)
-                    documents.append(doc)
+                    section_number = section.get("section_number", "unknown")
+                    if len(section_number.split('.')) == 1:  # This is a category
+                        categories[section_number] = section.get("title", "")
+            
+            # Second pass: create documents for laws with category context
+            for section in sections:
+                if isinstance(section, dict) and 'content' in section:
+                    section_number = section.get("section_number", "unknown")
+                    content = section["content"]
+                    title = section.get("title", content[:100])
+                    
+                    # Only process sections that are actual laws (have subsections)
+                    if len(section_number.split('.')) > 1:
+                        # Build hierarchical path for nested laws
+                        parts = section_number.split('.')
+                        parent_category = parts[0]
+                        category_title = categories.get(parent_category, "")
+                        
+                        law_path = f"{category_title} > {section_number}"
+                        
+                        meta = {
+                            "section_number": section_number,
+                            "title": title,
+                            "category": parent_category,
+                            "category_title": category_title,
+                            "law_path": law_path,
+                            "source_file": source_file,
+                            "citations": [f"{source_file}"]
+                        }
+                        doc = Document(text=content, metadata=meta)
+                        documents.append(doc)
+            
+            # Store documents locally for examination
+            try:
+                with open("extracted_documents.txt", "w", encoding="utf-8") as f:
+                    f.write(f"Documents extracted from: {source_file}\n")
+                    f.write(f"Total documents: {len(documents)}\n")
+                    f.write("=" * 80 + "\n\n")
+                    
+                    for i, doc in enumerate(documents, 1):
+                        f.write(f"=== Document {i} ===\n")
+                        f.write(f"Section: {doc.metadata.get('section_number', 'N/A')}\n")
+                        f.write(f"Category: {doc.metadata.get('category', 'N/A')} - {doc.metadata.get('category_title', 'N/A')}\n")
+                        f.write(f"Title: {doc.metadata.get('title', 'N/A')}\n")
+                        f.write(f"Law Path: {doc.metadata.get('law_path', 'N/A')}\n")
+                        f.write(f"Content: {doc.text}\n")
+                        f.write(f"Metadata: {doc.metadata}\n")
+                        f.write("\n" + "=" * 80 + "\n\n")
+                
+                print(f"Documents saved to extracted_documents.txt")
+            except Exception as e:
+                print(f"Warning: Could not save documents to file: {e}")
             
             return documents
             
@@ -184,7 +236,19 @@ class QdrantService:
         citations = []
         if hasattr(response, 'source_nodes') and response.source_nodes:
             for i, node in enumerate(response.source_nodes[:self.k]):
-                source = node.metadata.get('source', f'Chunk {i+1}')
+                # Get rich metadata for better citation
+                section_number = node.metadata.get('section_number', 'Unknown')
+                category_title = node.metadata.get('category_title', '')
+                title = node.metadata.get('title', '')
+                
+                # Create descriptive source with law number and category
+                if category_title and section_number:
+                    source = f"Law {section_number} ({category_title}) - {title}"
+                elif section_number:
+                    source = f"Law {section_number} - {title}"
+                else:
+                    source = f"Chunk {i+1}"
+                
                 text = node.text[:200] + "..." if len(node.text) > 200 else node.text
                 citations.append(Citation(source=source, text=text))
         
