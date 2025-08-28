@@ -130,27 +130,6 @@ def create_documents_from_pdf(pdf_path: str, source_file: str = "docs/laws.pdf")
                         doc = Document(text=content, metadata=meta)
                         documents.append(doc)
             
-            # Store documents locally for examination
-            try:
-                with open("extracted_documents.txt", "w", encoding="utf-8") as f:
-                    f.write(f"Documents extracted from: {source_file}\n")
-                    f.write(f"Total documents: {len(documents)}\n")
-                    f.write("=" * 80 + "\n\n")
-                    
-                    for i, doc in enumerate(documents, 1):
-                        f.write(f"=== Document {i} ===\n")
-                        f.write(f"Section: {doc.metadata.get('section_number', 'N/A')}\n")
-                        f.write(f"Category: {doc.metadata.get('category', 'N/A')} - {doc.metadata.get('category_title', 'N/A')}\n")
-                        f.write(f"Title: {doc.metadata.get('title', 'N/A')}\n")
-                        f.write(f"Law Path: {doc.metadata.get('law_path', 'N/A')}\n")
-                        f.write(f"Content: {doc.text}\n")
-                        f.write(f"Metadata: {doc.metadata}\n")
-                        f.write("\n" + "=" * 80 + "\n\n")
-                
-                print(f"Documents saved to extracted_documents.txt")
-            except Exception as e:
-                print(f"Warning: Could not save documents to file: {e}")
-            
             return documents
             
         except json.JSONDecodeError:
