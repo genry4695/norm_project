@@ -1,14 +1,15 @@
 # Norm AI - Westeros Legal Compliance System
 
-A FastAPI-based legal compliance system that allows natural language queries of Game of Thrones laws using AI-powered document extraction and vector search.
+A FastAPI-based legal compliance system with a React frontend that allows natural language queries of Game of Thrones laws using AI-powered document extraction and vector search.
 
 ## Quick Start
 
 ### Prerequisites
 - Python 3.8+
+- Node.js 18+
 - OpenAI API key
 
-### Setup
+### Backend Setup
 ```bash
 # Clone and setup
 cd norm_project
@@ -20,55 +21,32 @@ pip install -r requirements.txt
 echo "OPENAI_API_KEY=your_key_here" > .env
 ```
 
+### Frontend Setup
+```bash
+cd frontend
+npm install
+```
+
 ### Run
 ```bash
-# Start the service
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# Terminal 1: Start the backend
+cd app
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-# Or with Docker
-docker build -t norm-project .
-docker run -p 8000:8000 --env-file .env norm-project
+# Terminal 2: Start the frontend
+cd frontend
+npm run dev
 ```
 
-## API Usage
+## Usage
 
-### Query Endpoint
-```
-GET /query?query={your_question}
-```
-
-**Examples:**
-- `What does law 3.1.1 say about widow maintenance?`
-- `How do trials work in the Seven Kingdoms?`
-- `What are the rules for the Night's Watch?`
-
-**Response:**
-```json
-{
-  "query": "What does law 3.1.1 say about widow maintenance?",
-  "response": "The law requires the heir to maintain their father's surviving widow...",
-  "citations": [
-    {
-      "source": "Law 3.1.1 (Widows) - Maintenance of Widow",
-      "text": "However, the law requires the heir to maintain..."
-    }
-  ]
-}
-```
-
-## Access
-- **API**: http://localhost:8000
-- **Docs**: http://localhost:8000/docs (Swagger UI)
+- **Frontend**: http://localhost:3000 (or 3001 if 3000 is busy)
+- **Backend API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
 
 ## Features
 - AI-powered PDF text extraction and structuring
 - Vector similarity search with OpenAI embeddings
+- Chat interface for natural language queries
 - Rich citations including law numbers and categories
-- FastAPI with automatic API documentation
-- Docker support for production deployment
-
-## Testing
-```bash
-# Test the system
-python -c "from app.utils import DocumentService; ds = DocumentService(); docs = ds.create_documents('docs/laws.pdf'); print(f'Created {len(docs)} documents')"
-```
+- FastAPI backend with React frontend
